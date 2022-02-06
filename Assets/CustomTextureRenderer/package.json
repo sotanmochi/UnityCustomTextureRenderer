@@ -1,0 +1,9 @@
+{
+    "name": "jp.sotanmochi.unitycustomtexturerenderer",
+    "version": "1.0.0",
+    "displayName": "CustomTextureRenderer",
+    "description": "A graphics utility to update textures from native plugins.",
+    "license": "MIT",
+    "unity": "2020.3",
+    "author": { "name": "Soichiro Sugimoto" }
+}
