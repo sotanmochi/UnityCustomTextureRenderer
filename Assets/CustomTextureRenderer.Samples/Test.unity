@@ -225,12 +225,12 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1583533868}
+  - component: {fileID: 1583533869}
   - component: {fileID: 1583533867}
   - component: {fileID: 1583533866}
   - component: {fileID: 1583533865}
-  - component: {fileID: 1583533869}
   m_Layer: 0
-  m_Name: Cube
+  m_Name: TestCube
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -324,6 +324,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d39ea10283fd714bbec63b7904af0d4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _textureSize: 3
+  _useAnotherThread: 1
 --- !u!1 &1786066545
 GameObject:
   m_ObjectHideFlags: 0
