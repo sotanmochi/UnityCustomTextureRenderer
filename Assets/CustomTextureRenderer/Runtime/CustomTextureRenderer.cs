@@ -3,28 +3,41 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+using UnityEngine.Profiling;
+#endif
+
 namespace UnityCustomTextureRenderer
 {
+    /// <summary>
+    /// A graphics utility to update textures from native plugins.
+    /// The function for updating textures runs on Unity's Render Thread.
+    /// </summary>
     public sealed class CustomTextureRenderer : IDisposable
     {
-        public delegate void UpdateRawTextureDataFunction(IntPtr rawTextureData, int width, int height, uint userData);
-
         UpdateRawTextureDataFunction _updateRawTextureDataFunction;
+
         Texture _targetTexture;
+        int _textureWidth;
+        int _textureHeight;
+        int _bytesPerPixel;
+
+        bool _disposed;
 
         byte[] _buffer;
         GCHandle _bufferHandle;
         IntPtr _bufferPtr;
 
-        bool _disposed;
-
         delegate void UnityRenderingEventAndData(int eventID, IntPtr data);
         readonly UnityRenderingEventAndData _callback;
-
         readonly CommandBuffer _commandBuffer = new CommandBuffer();
 
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+        CustomSampler _updateRawTextureDataFunctionSampler;
+#endif
+
         /// <summary>
-        /// The UpdateRawTextureDataFunction will be called in Render Thread.
+        /// The UpdateRawTextureDataFunction runs on Unity's Render Thread.
         /// </summary>
         /// <param name="updateRawTextureDataFunction"></param>
         /// <param name="targetTexture"></param>
@@ -33,16 +46,22 @@ namespace UnityCustomTextureRenderer
         public CustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, 
                                         Texture targetTexture, int bytesPerPixel = 4, bool autoDispose = true)
         {
-            _updateRawTextureDataFunction = updateRawTextureDataFunction;
-            _targetTexture = targetTexture;
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            _updateRawTextureDataFunctionSampler = CustomSampler.Create("UpdateRawTextureDataFunction");
+#endif
+            if (autoDispose){ Application.quitting += Dispose; }
 
+            _updateRawTextureDataFunction = updateRawTextureDataFunction;
             _callback = new UnityRenderingEventAndData(TextureUpdateCallback);
+
+            _targetTexture = targetTexture;
+            _textureWidth = targetTexture.width;
+            _textureHeight = targetTexture.height;
+            _bytesPerPixel = bytesPerPixel;
 
             _buffer = new byte[_targetTexture.width * _targetTexture.height * bytesPerPixel];
             _bufferHandle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
             _bufferPtr = _bufferHandle.AddrOfPinnedObject();
-
-            if (autoDispose){ Application.quitting += Dispose; }
         }
 
         public void Dispose()
@@ -59,25 +78,18 @@ namespace UnityCustomTextureRenderer
             DebugLog($"[{nameof(CustomTextureRenderer)}] Disposed");
         }
 
-        public void Update(uint userData = 0)
+        public void Update()
         {
             if (_disposed) { return; }
 
             // Request texture update via the command buffer.
-            _commandBuffer.IssuePluginCustomTextureUpdateV2(
-                GetTextureUpdateCallback(), _targetTexture, userData
-            );
+            _commandBuffer.IssuePluginCustomTextureUpdateV2(GetTextureUpdateCallback(), _targetTexture, 0);
             Graphics.ExecuteCommandBuffer(_commandBuffer);
             _commandBuffer.Clear();
         }
 
-        IntPtr GetTextureUpdateCallback()
-        {
-            return Marshal.GetFunctionPointerForDelegate(_callback);
-        }
-
         /// <summary>
-        /// This function is called in Render Thread.
+        /// This function runs on Unity's Render Thread.
         /// </summary>
         /// <param name="eventID"></param>
         /// <param name="data"></param>
@@ -89,11 +101,15 @@ namespace UnityCustomTextureRenderer
 
             if (eventID == (int)UnityRenderingExtEventType.kUnityRenderingExtEventUpdateTextureBeginV2)
             {
-                var width = (int)updateParams->width;
-                var height = (int)updateParams->height;
-                var userData = updateParams->userData;
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+                _updateRawTextureDataFunctionSampler.Begin();
+#endif
 
-                _updateRawTextureDataFunction(_bufferPtr, width, height, userData);
+                _updateRawTextureDataFunction?.Invoke(_bufferPtr, _textureWidth, _textureHeight, _bytesPerPixel);
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+                _updateRawTextureDataFunctionSampler.End();
+#endif
 
                 updateParams->texData = _bufferPtr.ToPointer();
             }
@@ -101,6 +117,11 @@ namespace UnityCustomTextureRenderer
             {
                 updateParams->texData = null;
             }
+        }
+
+        IntPtr GetTextureUpdateCallback()
+        {
+            return Marshal.GetFunctionPointerForDelegate(_callback);
         }
 
         /// <summary>
