@@ -66,7 +66,7 @@ namespace UnityCustomTextureRenderer
 
         public void Dispose()
         {
-            _disposed = false;
+            _disposed = true;
 
             _bufferPtr = IntPtr.Zero;
             _bufferHandle.Free();

@@ -89,7 +89,7 @@ namespace UnityCustomTextureRenderer
         public void Dispose()
         {
             _cts.Cancel();
-            _disposed = false;
+            _disposed = true;
 
             _currentBufferPtr = IntPtr.Zero;
             _currentBufferHandle.Free();
