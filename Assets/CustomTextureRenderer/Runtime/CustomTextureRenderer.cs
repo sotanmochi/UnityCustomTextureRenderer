@@ -30,7 +30,10 @@ namespace UnityCustomTextureRenderer
 
         delegate void UnityRenderingEventAndData(int eventID, IntPtr data);
         readonly UnityRenderingEventAndData _callback;
-        readonly CommandBuffer _commandBuffer = new CommandBuffer();
+        readonly CommandBuffer _commandBuffer = new CommandBuffer()
+        {
+            name = "CustomTextureRenderer.IssuePluginCustomTextureUpdateV2"
+        };
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
         CustomSampler _updateRawTextureDataFunctionSampler;
