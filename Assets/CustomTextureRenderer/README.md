@@ -5,7 +5,8 @@ The function for updating textures runs on Unity's Render Thread or another thre
 
 IL2CPP is currently not supported.
 ```
-NotSupportedException: IL2CPP does not support marshaling delegates that point to instance methods to native code.
+NotSupportedException: 
+IL2CPP does not support marshaling delegates that point to instance methods to native code.
 The method we're attempting to marshal is: UnityCustomTextureRenderer.CustomTextureRenderer::TextureUpdateCallback
 UnityCustomTextureRenderer.CustomTextureRenderer.Update () (at <00000000000000000000000000000000>:0)
 UnityCustomTextureRenderer.Samples.Test.Update () (at <00000000000000000000000000000000>:0)
