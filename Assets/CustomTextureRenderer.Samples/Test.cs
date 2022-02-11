@@ -15,6 +15,8 @@ namespace UnityCustomTextureRenderer.Samples
             _256x256,
             _512x512,
             _1024x1024,
+            _2048x2048,
+            _4096x4096,
         }
 
         [SerializeField] TextureSize _textureSize;
@@ -35,6 +37,8 @@ namespace UnityCustomTextureRenderer.Samples
                 TextureSize._256x256   => 256,
                 TextureSize._512x512   => 512,
                 TextureSize._1024x1024 => 1024,
+                TextureSize._2048x2048 => 2048,
+                TextureSize._4096x4096 => 4096,
                 _ => 64,
             };
 
