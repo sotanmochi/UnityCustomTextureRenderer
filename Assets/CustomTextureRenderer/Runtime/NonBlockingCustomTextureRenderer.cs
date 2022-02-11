@@ -19,18 +19,18 @@ namespace UnityCustomTextureRenderer
     {
         UpdateRawTextureDataFunction _updateRawTextureDataFunction;
 
-        Texture _targetTexture;
+        Texture2D _targetTexture;
         int _textureWidth;
         int _textureHeight;
         int _bytesPerPixel;
 
         bool _disposed;
 
-        byte[] _currentBuffer;
+        uint[] _currentBuffer;
         GCHandle _currentBufferHandle;
         IntPtr _currentBufferPtr;
 
-        byte[] _nextBuffer;
+        uint[] _nextBuffer;
         GCHandle _nextBufferHandle;
         IntPtr _nextBufferPtr;
 
@@ -58,12 +58,20 @@ namespace UnityCustomTextureRenderer
         /// <param name="bytesPerPixel"></param>
         /// <param name="Dispose"></param>
         /// <param name="targetFrameTimeMilliseconds"></param>
-        public NonBlockingCustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, Texture targetTexture, 
+        public NonBlockingCustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, Texture2D targetTexture, 
                                                     int bytesPerPixel = 4, bool autoDispose = true, int targetFrameTimeMilliseconds = 20)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _updateRawTextureDataFunctionSampler = CustomSampler.Create("UpdateRawTextureDataFunction");
 #endif
+
+            if (targetTexture.format != TextureFormat.RGBA32)
+            {
+                _disposed = true;
+                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] Unsupported texture format: {targetTexture.format}");
+                return;
+            }
+
             if (autoDispose){ Application.quitting += Dispose; }
 
             _targetFrameTimeMilliseconds = targetFrameTimeMilliseconds;
@@ -76,11 +84,11 @@ namespace UnityCustomTextureRenderer
             _textureHeight = targetTexture.height;
             _bytesPerPixel = bytesPerPixel;
 
-            _currentBuffer = new byte[_targetTexture.width * _targetTexture.height * bytesPerPixel];
+            _currentBuffer = new uint[_targetTexture.width * _targetTexture.height];
             _currentBufferHandle = GCHandle.Alloc(_currentBuffer, GCHandleType.Pinned);
             _currentBufferPtr = _currentBufferHandle.AddrOfPinnedObject();
 
-            _nextBuffer = new byte[_targetTexture.width * _targetTexture.height * bytesPerPixel];
+            _nextBuffer = new uint[_targetTexture.width * _targetTexture.height];
             _nextBufferHandle = GCHandle.Alloc(_nextBuffer, GCHandleType.Pinned);
             _nextBufferPtr = _nextBufferHandle.AddrOfPinnedObject();
 
@@ -200,6 +208,21 @@ namespace UnityCustomTextureRenderer
         static void DebugLog(object message)
         {
             UnityEngine.Debug.Log(message);
+        }
+    
+        /// <summary>
+        /// Logs a message to the Unity Console 
+        /// only when DEVELOPMENT_BUILD or UNITY_EDITOR is defined.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        [
+            System.Diagnostics.Conditional("DEVELOPMENT_BUILD"), 
+            System.Diagnostics.Conditional("UNITY_EDITOR"),
+        ]
+        static void DebugLogError(object message)
+        {
+            UnityEngine.Debug.LogError(message);
         }
     }
 }

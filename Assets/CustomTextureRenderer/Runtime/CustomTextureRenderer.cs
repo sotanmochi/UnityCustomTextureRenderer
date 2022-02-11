@@ -17,14 +17,14 @@ namespace UnityCustomTextureRenderer
     {
         UpdateRawTextureDataFunction _updateRawTextureDataFunction;
 
-        Texture _targetTexture;
+        Texture2D _targetTexture;
         int _textureWidth;
         int _textureHeight;
         int _bytesPerPixel;
 
         bool _disposed;
 
-        byte[] _buffer;
+        uint[] _buffer;
         GCHandle _bufferHandle;
         IntPtr _bufferPtr;
 
@@ -47,11 +47,19 @@ namespace UnityCustomTextureRenderer
         /// <param name="bytesPerPixel"></param>
         /// <param name="autoDispose"></param>
         public CustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, 
-                                        Texture targetTexture, int bytesPerPixel = 4, bool autoDispose = true)
+                                        Texture2D targetTexture, int bytesPerPixel = 4, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _updateRawTextureDataFunctionSampler = CustomSampler.Create("UpdateRawTextureDataFunction");
 #endif
+
+            if (targetTexture.format != TextureFormat.RGBA32)
+            {
+                _disposed = true;
+                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] Unsupported texture format: {targetTexture.format}");
+                return;
+            }
+
             if (autoDispose){ Application.quitting += Dispose; }
 
             _updateRawTextureDataFunction = updateRawTextureDataFunction;
@@ -62,7 +70,7 @@ namespace UnityCustomTextureRenderer
             _textureHeight = targetTexture.height;
             _bytesPerPixel = bytesPerPixel;
 
-            _buffer = new byte[_targetTexture.width * _targetTexture.height * bytesPerPixel];
+            _buffer = new uint[_targetTexture.width * _targetTexture.height];
             _bufferHandle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
             _bufferPtr = _bufferHandle.AddrOfPinnedObject();
         }
@@ -140,6 +148,21 @@ namespace UnityCustomTextureRenderer
         void DebugLog(object message)
         {
             Debug.Log(message);
+        }
+    
+        /// <summary>
+        /// Logs a message to the Unity Console 
+        /// only when DEVELOPMENT_BUILD or UNITY_EDITOR is defined.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        [
+            System.Diagnostics.Conditional("DEVELOPMENT_BUILD"), 
+            System.Diagnostics.Conditional("UNITY_EDITOR"),
+        ]
+        static void DebugLogError(object message)
+        {
+            UnityEngine.Debug.LogError(message);
         }
     }
 }
