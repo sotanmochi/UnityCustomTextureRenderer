@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/CustomTextureRenderer.Samples/Test.unity
+    guid: f69885f6e594b5840b13b49edd88f36b
   m_configObjects: {}
