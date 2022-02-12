@@ -5,7 +5,7 @@ A graphics utility to update textures from native plugins.
 ## NonBlockingCustomTextureRenderer
 `NonBlockingCustomTextureRenderer` is a high performance graphics utility to update textures from native plugins.
 
-<image src="./Docs/NonBlockingCustomTextureRenderer.gif" width="80%">
+<image src="./Docs/NonBlockingCustomTextureRenderer.gif">
 
 The function for updating textures runs on another thread.  
 Asynchronous GPU upload (partial data copy) reduces the processing time per frame in the main thread for large size textures.
@@ -16,7 +16,7 @@ Asynchronous GPU upload (partial data copy) reduces the processing time per fram
 `CustomTextureRenderer` is an example to update textures from native plugins 
 using [CommandBuffer.IssuePluginCustomTextureUpdateV2](https://docs.unity3d.com/ScriptReference/Rendering.CommandBuffer.IssuePluginCustomTextureUpdateV2.html).
 
-<image src="./Docs/CustomTextureRenderer.gif" width="80%">
+<image src="./Docs/CustomTextureRenderer.gif">
 
 The function for updating textures runs on Unity's Render Thread.
 
