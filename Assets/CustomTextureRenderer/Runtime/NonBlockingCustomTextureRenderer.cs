@@ -16,7 +16,7 @@ using UnityEngine.Profiling;
 namespace UnityCustomTextureRenderer
 {
     /// <summary>
-    /// A graphics utility to update textures from native plugins.
+    /// A high performance graphics utility to update textures from native plugins. <br/>
     /// The function for updating textures runs on another thread.
     /// </summary>
     public sealed class NonBlockingCustomTextureRenderer : IDisposable
@@ -70,7 +70,8 @@ namespace UnityCustomTextureRenderer
 #endif
 
         /// <summary>
-        /// The UpdateRawTextureDataFunction runs on another thread.
+        /// The UpdateRawTextureDataFunction runs on another thread. <br/>
+        /// Asynchronous GPU upload (partial data copy) reduces the processing time per frame in the main thread for large size textures.
         /// </summary>
         /// <param name="updateRawTextureDataFunction"></param>
         /// <param name="targetTexture"></param>
@@ -87,7 +88,7 @@ namespace UnityCustomTextureRenderer
             if (!SystemInfo.supportsComputeShaders)
             {
                 _disposed = true;
-                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] Compute shaders are not supported in this device.");
+                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] Current device does not support compute shaders.");
                 return;
             }
 
