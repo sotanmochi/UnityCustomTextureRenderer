@@ -324,8 +324,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d39ea10283fd714bbec63b7904af0d4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _textureSize: 3
-  _useAnotherThread: 1
+  _textureSize: 4
+  _useNonBlockingVersion: 1
 --- !u!1 &1786066545
 GameObject:
   m_ObjectHideFlags: 0

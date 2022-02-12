@@ -20,11 +20,11 @@ namespace UnityCustomTextureRenderer.Samples
         }
 
         [SerializeField] TextureSize _textureSize;
-        [SerializeField] bool _useAnotherThread;
+        [SerializeField] bool _useNonBlockingVersion;
 
         uint _frame;
 
-        Texture2D _texture;
+        Texture _texture;
         CustomTextureRenderer _customTextureRenderer;
         NonBlockingCustomTextureRenderer _nonBlockingCustomTextureRenderer;
 
@@ -42,16 +42,36 @@ namespace UnityCustomTextureRenderer.Samples
                 _ => 64,
             };
 
-            _texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            _texture.wrapMode = TextureWrapMode.Clamp;
-
-            if (_useAnotherThread)
+            var asyncGPUUploadCount = _textureSize switch
             {
-                _nonBlockingCustomTextureRenderer = new NonBlockingCustomTextureRenderer(UpdateRawTextureDataFunction, _texture);
+                TextureSize._4096x4096 => 4,
+                _ => 1,
+            };
+
+            if (_useNonBlockingVersion)
+            {
+                var rt = new RenderTexture(size, size, 0, RenderTextureFormat.ARGB32);
+                rt.enableRandomWrite = true;
+                rt.Create();
+
+                _texture = rt;
+
+                _nonBlockingCustomTextureRenderer = 
+                    new NonBlockingCustomTextureRenderer(
+                        this.UpdateRawTextureDataFunction,
+                        targetTexture: (RenderTexture)_texture,
+                        targetFrameRateOfPluginRenderThread: 60,
+                        asyncGPUUploadCount: asyncGPUUploadCount
+                    );
             }
             else
             {
-                _customTextureRenderer = new CustomTextureRenderer(UpdateRawTextureDataFunction, _texture);
+                var tex2d = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                tex2d.wrapMode = TextureWrapMode.Clamp;
+
+                _texture = tex2d;
+
+                _customTextureRenderer = new CustomTextureRenderer(UpdateRawTextureDataFunction, (Texture2D)_texture);
             }
 
             // Set the texture to the renderer with using a property block.
@@ -70,7 +90,7 @@ namespace UnityCustomTextureRenderer.Samples
             _frame = (uint)(Time.time * 60);
 
             // Update texture
-            if (_useAnotherThread)
+            if (_useNonBlockingVersion)
             {
                 _nonBlockingCustomTextureRenderer.Update();
             }

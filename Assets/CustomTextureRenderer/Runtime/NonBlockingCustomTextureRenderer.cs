@@ -1,9 +1,13 @@
+// Copyright (c) 2022 Soichiro Sugimoto
+// Licensed under the MIT License. See LICENSE in the project root for license information.
+
+// #define DISABLE_ASYNC_GPU_UPLOAD // Run as a performance test without async GPU upload.
+
 using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Runtime.InteropServices;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
 using UnityEngine.Profiling;
@@ -17,12 +21,19 @@ namespace UnityCustomTextureRenderer
     /// </summary>
     public sealed class NonBlockingCustomTextureRenderer : IDisposable
     {
+        static readonly string ComputeShaderName = "NonBlockingCustomTextureRenderer";
+        static readonly string KernelName = "LoadRawTextureDataRGBA32";
+        static readonly string RawTextureDataPropertyName = "RawTextureData";
+        static readonly string OutputTexturePropertyName = "OutputTexture";
+        static readonly string TextureWidthPropertyName = "Width";
+        static readonly string TextureHeightPropertyName = "Height";
+
         UpdateRawTextureDataFunction _updateRawTextureDataFunction;
 
-        Texture2D _targetTexture;
-        int _textureWidth;
-        int _textureHeight;
-        int _bytesPerPixel;
+        RenderTexture _targetTexture;
+        readonly int _textureWidth;
+        readonly int _textureHeight;
+        readonly int _bytesPerPixel;
 
         bool _disposed;
 
@@ -34,20 +45,28 @@ namespace UnityCustomTextureRenderer
         GCHandle _nextBufferHandle;
         IntPtr _nextBufferPtr;
 
-        static readonly double TimestampsToTicks = TimeSpan.TicksPerSecond / (double)Stopwatch.Frequency;
-        readonly int _targetFrameTimeMilliseconds;
         readonly Thread _pluginRenderThread;
         readonly CancellationTokenSource _cts;
+        readonly int _targetFrameTimeMilliseconds;
+        static readonly double TimestampsToTicks = TimeSpan.TicksPerSecond / (double)Stopwatch.Frequency;
 
-        delegate void UnityRenderingEventAndData(int eventID, IntPtr data);
-        readonly UnityRenderingEventAndData _callback;
-        readonly CommandBuffer _commandBuffer = new CommandBuffer()
-        {
-            name = "CustomTextureRenderer.IssuePluginCustomTextureUpdateV2"
-        };
+        readonly ComputeShader _computeShader;
+        readonly int _kernelIndex;
+        readonly Vector3Int _kernelThreads;
+
+        readonly int _rawTextureDataPropertyId;
+        readonly int _outputTexturePropertyId;
+        readonly int _textureWidthPropertyId;
+        readonly int _textureHeightPropertyId;
+
+        ComputeBuffer _rawTextureDataComputeBuffer;
+
+        readonly int _asyncGPUUploadCount;
+        int _asyncGPUUploadFrame;
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
         CustomSampler _updateRawTextureDataFunctionSampler;
+        CustomSampler _asyncGPUUploadSampler;
 #endif
 
         /// <summary>
@@ -55,17 +74,32 @@ namespace UnityCustomTextureRenderer
         /// </summary>
         /// <param name="updateRawTextureDataFunction"></param>
         /// <param name="targetTexture"></param>
-        /// <param name="bytesPerPixel"></param>
-        /// <param name="Dispose"></param>
-        /// <param name="targetFrameTimeMilliseconds"></param>
-        public NonBlockingCustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, Texture2D targetTexture, 
-                                                    int bytesPerPixel = 4, bool autoDispose = true, int targetFrameTimeMilliseconds = 20)
+        /// <param name="targetFrameRateOfPluginRenderThread"></param>
+        /// <param name="asyncGPUUploadCount"></param>
+        /// <param name="autoDispose"></param>
+        public NonBlockingCustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, RenderTexture targetTexture, 
+                                                int targetFrameRateOfPluginRenderThread = 60, int asyncGPUUploadCount = 1, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _updateRawTextureDataFunctionSampler = CustomSampler.Create("UpdateRawTextureDataFunction");
+            _asyncGPUUploadSampler = CustomSampler.Create("AsyncGPUUpload");
 #endif
+            if (!SystemInfo.supportsComputeShaders)
+            {
+                _disposed = true;
+                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] Compute shaders are not supported in this device.");
+                return;
+            }
 
-            if (targetTexture.format != TextureFormat.RGBA32)
+            _computeShader = UnityEngine.Object.Instantiate(Resources.Load<ComputeShader>(ComputeShaderName));
+            if (_computeShader is null)
+            {
+                _disposed = true;
+                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] The compute shader '{ComputeShaderName}' could not be found in 'Resources'.");
+                return;
+            }
+
+            if (targetTexture.format != RenderTextureFormat.ARGB32)
             {
                 _disposed = true;
                 DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] Unsupported texture format: {targetTexture.format}");
@@ -74,15 +108,16 @@ namespace UnityCustomTextureRenderer
 
             if (autoDispose){ Application.quitting += Dispose; }
 
-            _targetFrameTimeMilliseconds = targetFrameTimeMilliseconds;
-
             _updateRawTextureDataFunction = updateRawTextureDataFunction;
-            _callback = new UnityRenderingEventAndData(TextureUpdateCallback);
+            DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] The UpdateRawTextureDataFunction is \n'{_updateRawTextureDataFunction.Target}.{_updateRawTextureDataFunction.Method.Name}'.");
+
+            _targetFrameTimeMilliseconds = (int)(1000.0f / targetFrameRateOfPluginRenderThread);
+            DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Target frame time milliseconds: {_targetFrameTimeMilliseconds}");
 
             _targetTexture = targetTexture;
             _textureWidth = targetTexture.width;
             _textureHeight = targetTexture.height;
-            _bytesPerPixel = bytesPerPixel;
+            _bytesPerPixel = 4; // RGBA32. 1 byte (8 bits) per channel.
 
             _currentBuffer = new uint[_targetTexture.width * _targetTexture.height];
             _currentBufferHandle = GCHandle.Alloc(_currentBuffer, GCHandleType.Pinned);
@@ -91,6 +126,27 @@ namespace UnityCustomTextureRenderer
             _nextBuffer = new uint[_targetTexture.width * _targetTexture.height];
             _nextBufferHandle = GCHandle.Alloc(_nextBuffer, GCHandleType.Pinned);
             _nextBufferPtr = _nextBufferHandle.AddrOfPinnedObject();
+
+            DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Texture size: {_targetTexture.width}x{_targetTexture.height}");
+            DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Texture buffer size: {_targetTexture.width * _targetTexture.height * _bytesPerPixel} [Bytes]");
+
+            _kernelIndex = _computeShader.FindKernel(KernelName);
+
+            _computeShader.GetKernelThreadGroupSizes(_kernelIndex, out uint numThreadsX, out uint numThreadsY, out uint numThreadsZ);
+            _kernelThreads.x = (int)numThreadsX;
+            _kernelThreads.y = (int)numThreadsY;
+            _kernelThreads.z = (int)numThreadsZ;
+
+            _rawTextureDataPropertyId = Shader.PropertyToID(RawTextureDataPropertyName);
+            _outputTexturePropertyId = Shader.PropertyToID(OutputTexturePropertyName);
+            _textureWidthPropertyId = Shader.PropertyToID(TextureWidthPropertyName);
+            _textureHeightPropertyId = Shader.PropertyToID(TextureHeightPropertyName);
+
+            _rawTextureDataComputeBuffer = new ComputeBuffer(_targetTexture.width * _targetTexture.height, sizeof(uint));
+
+            _asyncGPUUploadCount = (asyncGPUUploadCount < 1) ? 1 : asyncGPUUploadCount;
+
+            DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Async GPU Upload Count: {_asyncGPUUploadCount}");
 
             _cts = new CancellationTokenSource();
             _pluginRenderThread = new Thread(PluginRenderThread);
@@ -113,17 +169,60 @@ namespace UnityCustomTextureRenderer
             _updateRawTextureDataFunction = null;
             _targetTexture = null;
 
+            _rawTextureDataComputeBuffer?.Dispose();
+            _rawTextureDataComputeBuffer = null;
+
             DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Disposed");
         }
 
         public void Update()
         {
             if (_disposed) { return; }
+            AsyncGPUUpload();
+            Render();
+        }
 
-            // Request texture update via the command buffer.
-            _commandBuffer.IssuePluginCustomTextureUpdateV2(GetTextureUpdateCallback(), _targetTexture, 0);
-            Graphics.ExecuteCommandBuffer(_commandBuffer);
-            _commandBuffer.Clear();
+        void AsyncGPUUpload()
+        {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            _asyncGPUUploadSampler.Begin();
+#endif
+
+#if DISABLE_ASYNC_GPU_UPLOAD
+            // Run as a performance test without async GPU upload.
+            _rawTextureDataComputeBuffer.SetData(_currentBuffer, 0, 0, _currentBuffer.Length);
+#else
+            if (_asyncGPUUploadFrame < _asyncGPUUploadCount)
+            {
+                var partialCopyLength = _currentBuffer.Length / _asyncGPUUploadCount;
+                var startIndex = partialCopyLength * _asyncGPUUploadFrame;
+                _rawTextureDataComputeBuffer.SetData(_currentBuffer, startIndex, startIndex, partialCopyLength);
+            }
+#endif
+            _asyncGPUUploadFrame++;
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            _asyncGPUUploadSampler.End();
+#endif
+        }
+
+        void Render()
+        {
+#if !DISABLE_ASYNC_GPU_UPLOAD
+            if (_asyncGPUUploadFrame == _asyncGPUUploadCount)
+#endif
+            {
+                _computeShader.SetInt(_textureWidthPropertyId, _textureWidth);
+                _computeShader.SetInt(_textureHeightPropertyId, _textureHeight);
+                _computeShader.SetBuffer(_kernelIndex, _rawTextureDataPropertyId, _rawTextureDataComputeBuffer);
+                _computeShader.SetTexture(_kernelIndex, _outputTexturePropertyId, _targetTexture);
+
+                int threadGroupsX = Mathf.CeilToInt((float)_textureWidth / _kernelThreads.x);
+                int threadGroupsY = Mathf.CeilToInt((float)_textureHeight / _kernelThreads.y);
+                _computeShader.Dispatch(_kernelIndex, threadGroupsX, threadGroupsY, 1);
+
+                // DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}.Render] Dispatch the compute shader. Async GPU Upload Frame: {_asyncGPUUploadFrame}");
+            }
         }
 
         /// <summary>
@@ -146,7 +245,13 @@ namespace UnityCustomTextureRenderer
                 // Main loop
                 {
                     _updateRawTextureDataFunction?.Invoke(_nextBufferPtr, _textureWidth, _textureHeight, _bytesPerPixel);
+
+                    // Swap the buffers.
                     _nextBufferPtr = Interlocked.Exchange(ref _currentBufferPtr, _nextBufferPtr);
+                    _nextBuffer = Interlocked.Exchange(ref _currentBuffer, _nextBuffer);
+
+                    // Reset to execute async gpu upload.
+                    _asyncGPUUploadFrame = 0;
                 }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
@@ -170,32 +275,6 @@ namespace UnityCustomTextureRenderer
         }
 
         /// <summary>
-        /// This function runs on Unity's Render Thread.
-        /// </summary>
-        /// <param name="eventID"></param>
-        /// <param name="data"></param>
-        unsafe void TextureUpdateCallback(int eventID, IntPtr data)
-        {
-            if (_currentBufferPtr == IntPtr.Zero) { return; }
-
-            var updateParams = (UnityRenderingExtTextureUpdateParamsV2*)data.ToPointer();
-
-            if (eventID == (int)UnityRenderingExtEventType.kUnityRenderingExtEventUpdateTextureBeginV2)
-            {
-                updateParams->texData = _currentBufferPtr.ToPointer();
-            }
-            else if (eventID == (int)UnityRenderingExtEventType.kUnityRenderingExtEventUpdateTextureEndV2)
-            {
-                updateParams->texData = null;
-            }
-        }
-
-        IntPtr GetTextureUpdateCallback()
-        {
-            return Marshal.GetFunctionPointerForDelegate(_callback);
-        }
-
-        /// <summary>
         /// Logs a message to the Unity Console 
         /// only when DEVELOPMENT_BUILD or UNITY_EDITOR is defined.
         /// </summary>
@@ -209,7 +288,7 @@ namespace UnityCustomTextureRenderer
         {
             UnityEngine.Debug.Log(message);
         }
-    
+
         /// <summary>
         /// Logs a message to the Unity Console 
         /// only when DEVELOPMENT_BUILD or UNITY_EDITOR is defined.
