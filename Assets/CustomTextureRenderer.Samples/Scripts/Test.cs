@@ -22,6 +22,8 @@ namespace UnityCustomTextureRenderer.Samples
         [SerializeField] TextureSize _textureSize;
         [SerializeField] bool _useNonBlockingVersion;
 
+        public event Action<(int TextureWidth, int TextureHeight, bool UseNonBlockingVersion)> OnInitialized;
+
         uint _frame;
 
         Texture _texture;
@@ -78,6 +80,8 @@ namespace UnityCustomTextureRenderer.Samples
             var prop = new MaterialPropertyBlock();
             prop.SetTexture("_MainTex", _texture);
             GetComponent<Renderer>().SetPropertyBlock(prop);
+
+            OnInitialized?.Invoke((size, size, _useNonBlockingVersion));
         }
 
         void OnDestroy()
