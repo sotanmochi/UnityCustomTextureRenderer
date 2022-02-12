@@ -1,21 +1,31 @@
 # UnityCustomTextureRenderer
 
-A graphics utility to update textures from native plugins.  
-The function for updating textures runs on Unity's Render Thread or another thread.
+A graphics utility to update textures from native plugins.
 
-IL2CPP is currently not supported.
+## NonBlockingCustomTextureRenderer
+`NonBlockingCustomTextureRenderer` is a high performance graphics utility to update textures from native plugins.
+
+<image src="./Docs/NonBlockingCustomTextureRenderer.gif" width="40%">
+
+The function for updating textures runs on another thread.  
+Asynchronous GPU upload (partial data copy) reduces the processing time per frame in the main thread for large size textures.
+
+`NonBlockingCustomTextureRenderer` is available on IL2CPP.
+
+## CustomTextureRenderer
+`CustomTextureRenderer` is an example to update textures from native plugins 
+using [CommandBuffer.IssuePluginCustomTextureUpdateV2](https://docs.unity3d.com/ScriptReference/Rendering.CommandBuffer.IssuePluginCustomTextureUpdateV2.html).
+
+<image src="./Docs/CustomTextureRenderer.gif" width="40%">
+
+The function for updating textures runs on Unity's Render Thread.
+
+`CustomTextureRenderer` does not work on IL2CPP.
 ```
 NotSupportedException: 
 IL2CPP does not support marshaling delegates that point to instance methods to native code.
 The method we're attempting to marshal is: UnityCustomTextureRenderer.CustomTextureRenderer::TextureUpdateCallback
 UnityCustomTextureRenderer.CustomTextureRenderer.Update () (at <00000000000000000000000000000000>:0)
-UnityCustomTextureRenderer.Samples.Test.Update () (at <00000000000000000000000000000000>:0)
-```
-```
-NotSupportedException: 
-IL2CPP does not support marshaling delegates that point to instance methods to native code.
-The method we're attempting to marshal is: UnityCustomTextureRenderer.NonBlockingCustomTextureRenderer::TextureUpdateCallback
-UnityCustomTextureRenderer.NonBlockingCustomTextureRenderer.Update () (at <00000000000000000000000000000000>:0)
 UnityCustomTextureRenderer.Samples.Test.Update () (at <00000000000000000000000000000000>:0)
 ```
 
