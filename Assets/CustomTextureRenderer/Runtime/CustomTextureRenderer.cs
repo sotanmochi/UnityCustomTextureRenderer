@@ -10,17 +10,17 @@ using UnityEngine.Profiling;
 namespace UnityCustomTextureRenderer
 {
     /// <summary>
-    /// A graphics utility to update textures from native plugins.
-    /// The function for updating textures runs on Unity's Render Thread.
+    /// A graphics utility to update textures from native plugins. <br/>
+    /// The function for updating textures runs on Unity's Render Thread. <br/>
     /// </summary>
     public sealed class CustomTextureRenderer : IDisposable
     {
         UpdateRawTextureDataFunction _updateRawTextureDataFunction;
 
         Texture2D _targetTexture;
-        int _textureWidth;
-        int _textureHeight;
-        int _bytesPerPixel;
+        readonly int _textureWidth;
+        readonly int _textureHeight;
+        readonly int _bytesPerPixel;
 
         bool _disposed;
 
@@ -44,10 +44,8 @@ namespace UnityCustomTextureRenderer
         /// </summary>
         /// <param name="updateRawTextureDataFunction"></param>
         /// <param name="targetTexture"></param>
-        /// <param name="bytesPerPixel"></param>
         /// <param name="autoDispose"></param>
-        public CustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, 
-                                        Texture2D targetTexture, int bytesPerPixel = 4, bool autoDispose = true)
+        public CustomTextureRenderer(UpdateRawTextureDataFunction updateRawTextureDataFunction, Texture2D targetTexture, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _updateRawTextureDataFunctionSampler = CustomSampler.Create("UpdateRawTextureDataFunction");
@@ -68,7 +66,7 @@ namespace UnityCustomTextureRenderer
             _targetTexture = targetTexture;
             _textureWidth = targetTexture.width;
             _textureHeight = targetTexture.height;
-            _bytesPerPixel = bytesPerPixel;
+            _bytesPerPixel = 4; // RGBA32. 1 byte (8 bits) per channel.
 
             _buffer = new uint[_targetTexture.width * _targetTexture.height];
             _bufferHandle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
