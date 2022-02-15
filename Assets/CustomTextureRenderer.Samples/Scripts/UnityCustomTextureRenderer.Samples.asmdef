@@ -1,0 +1,16 @@
+{
+    "name": "UnityCustomTextureRenderer.Samples",
+    "rootNamespace": "",
+    "references": [
+        "UnityCustomTextureRenderer"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
