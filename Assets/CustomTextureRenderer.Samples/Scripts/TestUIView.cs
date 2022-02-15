@@ -8,6 +8,7 @@ namespace UnityCustomTextureRenderer.Samples
         [SerializeField] Text _title;
         [SerializeField] Text _textureSize;
         [SerializeField] Text _frameRate;
+        [SerializeField] Text _graphicsAPI;
 
         public void SetTitle(string value)
         {
@@ -22,6 +23,11 @@ namespace UnityCustomTextureRenderer.Samples
         public void SetFrameRate(float value)
         {
             _frameRate.text = $"{value:F2}";
+        }
+
+        public void SetGraphicsAPI(string value)
+        {
+            _graphicsAPI.text = value;
         }
     }
 }

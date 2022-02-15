@@ -11,6 +11,8 @@ namespace UnityCustomTextureRenderer.Samples
 
         void Awake()
         {
+            _uiView.SetGraphicsAPI(SystemInfo.graphicsDeviceType.ToString());
+
             _test.OnInitialized += (values) =>
             {
                 var title = values.UseNonBlockingVersion ? 
