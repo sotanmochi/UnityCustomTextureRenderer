@@ -21,12 +21,10 @@ namespace UnityCustomTextureRenderer
     /// </summary>
     public sealed class NonBlockingCustomTextureRenderer : IDisposable
     {
-        static readonly string ComputeShaderName = "NonBlockingCustomTextureRenderer";
-        static readonly string KernelName = "LoadRawTextureDataRGBA32";
-        static readonly string RawTextureDataPropertyName = "RawTextureData";
-        static readonly string OutputTexturePropertyName = "OutputTexture";
-        static readonly string TextureWidthPropertyName = "Width";
-        static readonly string TextureHeightPropertyName = "Height";
+        static readonly string RenderShaderName = "NonBlockingCustomTextureRenderer";
+        static readonly string RawTextureDataPropertyName = "_RawTextureData";
+        static readonly string TextureWidthPropertyName = "_TextureWidth";
+        static readonly string TextureHeightPropertyName = "_TextureHeight";
 
         UpdateRawTextureDataFunction _updateRawTextureDataFunction;
 
@@ -50,12 +48,9 @@ namespace UnityCustomTextureRenderer
         readonly int _targetFrameTimeMilliseconds;
         static readonly double TimestampsToTicks = TimeSpan.TicksPerSecond / (double)Stopwatch.Frequency;
 
-        readonly ComputeShader _computeShader;
-        readonly int _kernelIndex;
-        readonly Vector3Int _kernelThreads;
+        readonly Material _renderMaterial;
 
         readonly int _rawTextureDataPropertyId;
-        readonly int _outputTexturePropertyId;
         readonly int _textureWidthPropertyId;
         readonly int _textureHeightPropertyId;
 
@@ -92,13 +87,14 @@ namespace UnityCustomTextureRenderer
                 return;
             }
 
-            _computeShader = UnityEngine.Object.Instantiate(Resources.Load<ComputeShader>(ComputeShaderName));
-            if (_computeShader is null)
+            var renderShader = Resources.Load<Shader>(RenderShaderName);
+            if (renderShader is null)
             {
                 _disposed = true;
-                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] The compute shader '{ComputeShaderName}' could not be found in 'Resources'.");
+                DebugLogError($"[{nameof(NonBlockingCustomTextureRenderer)}] The shader '{RenderShaderName}' could not be found in 'Resources'.");
                 return;
             }
+            _renderMaterial = new Material(renderShader);
 
             if (targetTexture.format != RenderTextureFormat.ARGB32)
             {
@@ -131,15 +127,7 @@ namespace UnityCustomTextureRenderer
             DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Texture size: {_targetTexture.width}x{_targetTexture.height}");
             DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}] Texture buffer size: {_targetTexture.width * _targetTexture.height * _bytesPerPixel} [Bytes]");
 
-            _kernelIndex = _computeShader.FindKernel(KernelName);
-
-            _computeShader.GetKernelThreadGroupSizes(_kernelIndex, out uint numThreadsX, out uint numThreadsY, out uint numThreadsZ);
-            _kernelThreads.x = (int)numThreadsX;
-            _kernelThreads.y = (int)numThreadsY;
-            _kernelThreads.z = (int)numThreadsZ;
-
             _rawTextureDataPropertyId = Shader.PropertyToID(RawTextureDataPropertyName);
-            _outputTexturePropertyId = Shader.PropertyToID(OutputTexturePropertyName);
             _textureWidthPropertyId = Shader.PropertyToID(TextureWidthPropertyName);
             _textureHeightPropertyId = Shader.PropertyToID(TextureHeightPropertyName);
 
@@ -213,16 +201,10 @@ namespace UnityCustomTextureRenderer
             if (_asyncGPUUploadFrame == _asyncGPUUploadCount)
 #endif
             {
-                _computeShader.SetInt(_textureWidthPropertyId, _textureWidth);
-                _computeShader.SetInt(_textureHeightPropertyId, _textureHeight);
-                _computeShader.SetBuffer(_kernelIndex, _rawTextureDataPropertyId, _rawTextureDataComputeBuffer);
-                _computeShader.SetTexture(_kernelIndex, _outputTexturePropertyId, _targetTexture);
-
-                int threadGroupsX = Mathf.CeilToInt((float)_textureWidth / _kernelThreads.x);
-                int threadGroupsY = Mathf.CeilToInt((float)_textureHeight / _kernelThreads.y);
-                _computeShader.Dispatch(_kernelIndex, threadGroupsX, threadGroupsY, 1);
-
-                // DebugLog($"[{nameof(NonBlockingCustomTextureRenderer)}.Render] Dispatch the compute shader. Async GPU Upload Frame: {_asyncGPUUploadFrame}");
+                _renderMaterial.SetInt(_textureWidthPropertyId, _textureWidth);
+                _renderMaterial.SetInt(_textureHeightPropertyId, _textureHeight);
+                _renderMaterial.SetBuffer(_rawTextureDataPropertyId, _rawTextureDataComputeBuffer);
+                Graphics.Blit(null, _targetTexture, _renderMaterial);
             }
         }
 
