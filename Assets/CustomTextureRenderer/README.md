@@ -38,16 +38,14 @@ UnityCustomTextureRenderer.Samples.Test.Update () (at <0000000000000000000000000
 // manifest.json
 {
   "dependencies": {
-    "jp.sotanmochi.unitycustomtexturerenderer": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer#v1.2.0",
-    "jp.sotanmochi.unitycustomtexturerenderer.samples": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer.Samples#v1.2.0",
+    "jp.sotanmochi.unitycustomtexturerenderer": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer#v1.1.0",
+    "jp.sotanmochi.unitycustomtexturerenderer.samples": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer.Samples#v1.1.0",
     ...
   }
 }
 ```
 
 ## References
-- [Unity Shader Programming Vol.06 - 第4章 Compute/Structured Buffer](https://xjine.booth.pm/items/2813518)
-- [UnityShaderProgramming_06_Sample/04_StructuredBuffer](https://github.com/XJINE/UnityShaderProgramming_06_Sample/tree/main/Assets/04_StructuredBuffer)
 - [UnityグラフィックスAPI総点検！〜最近こんなの増えてました〜 - Unityステーション](https://youtu.be/7tjycAEMJNg?t=3197)
 - https://github.com/keijiro/TextureUpdateExample
 
