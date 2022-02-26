@@ -1,11 +1,12 @@
 using System;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace UnityCustomTextureRenderer.Samples
 {
     public class Test : MonoBehaviour
     {
-        [System.Runtime.InteropServices.DllImport("Plasma")]
+        [System.Runtime.InteropServices.DllImport("Plasma2")]
         static extern IntPtr UpdateRawTextureData(IntPtr data, int width, int height, uint frameCount);
 
         enum TextureSize
@@ -20,15 +21,12 @@ namespace UnityCustomTextureRenderer.Samples
         }
 
         [SerializeField] TextureSize _textureSize;
-        [SerializeField] bool _useNonBlockingVersion;
-
-        public event Action<(int TextureWidth, int TextureHeight, bool UseNonBlockingVersion)> OnInitialized;
+        public event Action<(int TextureWidth, int TextureHeight)> OnInitialized;
 
         uint _frame;
 
-        Texture _texture;
-        CustomTextureRenderer _customTextureRenderer;
-        NonBlockingCustomTextureRenderer _nonBlockingCustomTextureRenderer;
+        Texture2D _texture;
+        PluginTextureRenderer _pluginTextureRenderer;
 
         void Start()
         {
@@ -44,44 +42,18 @@ namespace UnityCustomTextureRenderer.Samples
                 _ => 64,
             };
 
-            var asyncGPUUploadCount = _textureSize switch
-            {
-                TextureSize._4096x4096 => 4,
-                _ => 1,
-            };
+            _texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            _texture.wrapMode = TextureWrapMode.Clamp;
 
-            if (_useNonBlockingVersion)
-            {
-                var rt = new RenderTexture(size, size, 0, RenderTextureFormat.ARGB32);
-                rt.enableRandomWrite = true;
-                rt.Create();
-
-                _texture = rt;
-
-                _nonBlockingCustomTextureRenderer = 
-                    new NonBlockingCustomTextureRenderer(
-                        this.UpdateRawTextureDataFunction,
-                        targetTexture: (RenderTexture)_texture,
-                        targetFrameRateOfPluginRenderThread: 60,
-                        asyncGPUUploadCount: asyncGPUUploadCount
-                    );
-            }
-            else
-            {
-                var tex2d = new Texture2D(size, size, TextureFormat.RGBA32, false);
-                tex2d.wrapMode = TextureWrapMode.Clamp;
-
-                _texture = tex2d;
-
-                _customTextureRenderer = new CustomTextureRenderer(UpdateRawTextureDataFunction, (Texture2D)_texture);
-            }
+            _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, _texture);
+            CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
 
             // Set the texture to the renderer with using a property block.
             var prop = new MaterialPropertyBlock();
             prop.SetTexture("_MainTex", _texture);
             GetComponent<Renderer>().SetPropertyBlock(prop);
 
-            OnInitialized?.Invoke((size, size, _useNonBlockingVersion));
+            OnInitialized?.Invoke((size, size));
         }
 
         void OnDestroy()
@@ -92,16 +64,7 @@ namespace UnityCustomTextureRenderer.Samples
         void Update()
         {
             _frame = (uint)(Time.time * 60);
-
-            // Update texture
-            if (_useNonBlockingVersion)
-            {
-                _nonBlockingCustomTextureRenderer.Update();
-            }
-            else
-            {
-                _customTextureRenderer.Update();
-            }
+            _pluginTextureRenderer.SetUserData(_frame);
 
             // Rotation
             transform.eulerAngles = new Vector3(10, 20, 30) * Time.time;
@@ -114,7 +77,7 @@ namespace UnityCustomTextureRenderer.Samples
         /// <param name="width"></param>
         /// <param name="height"></param>
         /// <param name="frameCount"></param>
-        void UpdateRawTextureDataFunction(IntPtr data, int width, int height, int bytesPerPixel)
+        void UpdateRawTextureDataCallback(IntPtr data, int width, int height, int bytesPerPixel)
         {
             UpdateRawTextureData(data, width, height, _frame);
         }

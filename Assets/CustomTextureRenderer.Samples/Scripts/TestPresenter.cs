@@ -15,10 +15,7 @@ namespace UnityCustomTextureRenderer.Samples
 
             _test.OnInitialized += (values) =>
             {
-                var title = values.UseNonBlockingVersion ? 
-                            nameof(UnityCustomTextureRenderer.NonBlockingCustomTextureRenderer) : 
-                            nameof(UnityCustomTextureRenderer.CustomTextureRenderer);
-
+                var title = nameof(UnityCustomTextureRenderer.CustomTextureRenderSystem);
                 _uiView.SetTitle(title);
                 _uiView.SetTextureSize(values.TextureWidth, values.TextureHeight);
             };
