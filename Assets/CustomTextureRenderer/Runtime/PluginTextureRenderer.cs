@@ -48,7 +48,8 @@ namespace UnityCustomTextureRenderer
         private CustomSampler _textureUpdateLoopSampler;
 #endif
 
-        public PluginTextureRenderer(RawTextureDataUpdateCallback callback, Texture2D targetTexture, bool autoDispose = true)
+        public PluginTextureRenderer(RawTextureDataUpdateCallback callback, Texture2D targetTexture, 
+                                        int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _textureUpdateLoopSampler = CustomSampler.Create("RawTextureDataUpdateFunction");
@@ -56,6 +57,7 @@ namespace UnityCustomTextureRenderer
 
             _loopAction = RawTextureDataUpdate;
             _rawTextureDataUpdateCallback = callback;
+            DebugLog($"[{nameof(PluginTextureRenderer)}] The RawTextureDataUpdateCallback is \n'{_rawTextureDataUpdateCallback.Target}.{_rawTextureDataUpdateCallback.Method.Name}'.");
 
             _textureBuffer = new uint[targetTexture.width * targetTexture.height];
             _textureBufferHandle = GCHandle.Alloc(_textureBuffer, GCHandleType.Pinned);
@@ -70,6 +72,10 @@ namespace UnityCustomTextureRenderer
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
 
+            _targetFrameTimeMilliseconds = (int)(1000.0f / targetFrameRateOfPluginRenderThread);
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame rate: {targetFrameRateOfPluginRenderThread}");
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame time milliseconds: {_targetFrameTimeMilliseconds}");
+
             _targetTexture = targetTexture;
             _textureWidth = targetTexture.width;
             _textureHeight = targetTexture.height;
@@ -79,7 +85,8 @@ namespace UnityCustomTextureRenderer
             _pluginRenderThread.Start();
         }
 
-        public PluginTextureRenderer(IssuePluginCustomTextureUpdateCallback callback, Texture2D targetTexture, bool autoDispose = true)
+        public PluginTextureRenderer(IssuePluginCustomTextureUpdateCallback callback, Texture2D targetTexture, 
+                                        int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _textureUpdateLoopSampler = CustomSampler.Create("CustomTextureUpdateFunction");
@@ -87,6 +94,7 @@ namespace UnityCustomTextureRenderer
 
             _loopAction = IssuePluginCustomTextureUpdate;
             _customTextureUpdateCallback = callback;
+            DebugLog($"[{nameof(PluginTextureRenderer)}] The CustomTextureUpdateCallback is \n'{_customTextureUpdateCallback.Target}.{_customTextureUpdateCallback.Method.Name}'.");
 
             _textureUpdateParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(_textureUpdateParams));
 
@@ -98,6 +106,10 @@ namespace UnityCustomTextureRenderer
             }
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
+
+            _targetFrameTimeMilliseconds = (int)(1000.0f / targetFrameRateOfPluginRenderThread);
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame rate: {targetFrameRateOfPluginRenderThread}");
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame time milliseconds: {_targetFrameTimeMilliseconds}");
 
             _targetTexture = targetTexture;
             _textureWidth = targetTexture.width;
