@@ -1,6 +1,6 @@
 {
     "name": "jp.sotanmochi.unitycustomtexturerenderer.samples",
-    "version": "1.1.1",
+    "version": "1.2.1",
     "displayName": "CustomTextureRenderer.Samples",
     "description": "A graphics utility to update textures from native plugins.",
     "license": "MIT",
