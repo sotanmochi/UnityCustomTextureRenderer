@@ -6,6 +6,13 @@ namespace UnityCustomTextureRenderer.Samples
 {
     public class Test : MonoBehaviour
     {
+#if PLATFORM_IOS
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+#else
+        [System.Runtime.InteropServices.DllImport("Plasma")]
+#endif
+        static extern IntPtr GetTextureUpdateCallback();
+
         [System.Runtime.InteropServices.DllImport("Plasma2")]
         static extern IntPtr UpdateRawTextureData(IntPtr data, int width, int height, uint frameCount);
 
@@ -20,7 +27,15 @@ namespace UnityCustomTextureRenderer.Samples
             _4096x4096,
         }
 
+        enum PluginType
+        {
+            Type1,
+            Type2
+        }
+
         [SerializeField] TextureSize _textureSize;
+        [SerializeField] PluginType _pluginType;
+
         public event Action<(int TextureWidth, int TextureHeight)> OnInitialized;
 
         uint _frame;
@@ -45,8 +60,17 @@ namespace UnityCustomTextureRenderer.Samples
             _texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
             _texture.wrapMode = TextureWrapMode.Clamp;
 
-            _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, _texture);
-            CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
+            if (_pluginType is PluginType.Type1)
+            {
+                var callback = Marshal.GetDelegateForFunctionPointer<IssuePluginCustomTextureUpdateCallback>(GetTextureUpdateCallback());
+                _pluginTextureRenderer = new PluginTextureRenderer(callback, _texture);
+                CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
+            }
+            else if (_pluginType is PluginType.Type2)
+            {
+                _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, _texture);
+                CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
+            }
 
             // Set the texture to the renderer with using a property block.
             var prop = new MaterialPropertyBlock();
