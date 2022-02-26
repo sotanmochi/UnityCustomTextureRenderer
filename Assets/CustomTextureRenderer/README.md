@@ -1,33 +1,9 @@
 # UnityCustomTextureRenderer
 
-A graphics utility to update textures from native plugins.
-
-## NonBlockingCustomTextureRenderer
-`NonBlockingCustomTextureRenderer` is a high performance graphics utility to update textures from native plugins.
-
-<image src="https://user-images.githubusercontent.com/16936357/153717382-8ad7ebed-3f41-4830-9bfe-8bf02e967e90.gif">
-
+A high performance graphics utility to update textures from native plugins.  
 The function for updating textures runs on another thread.  
-Asynchronous GPU upload (partial data copy) reduces the processing time per frame in the main thread for large size textures.
 
-`NonBlockingCustomTextureRenderer` is available on IL2CPP.
-
-## CustomTextureRenderer
-`CustomTextureRenderer` is an example to update textures from native plugins 
-using [CommandBuffer.IssuePluginCustomTextureUpdateV2](https://docs.unity3d.com/ScriptReference/Rendering.CommandBuffer.IssuePluginCustomTextureUpdateV2.html).
-
-<image src="https://user-images.githubusercontent.com/16936357/153717393-da4bee23-5584-42dc-8823-6de54199e3c1.gif">
-
-The function for updating textures runs on Unity's Render Thread.
-
-`CustomTextureRenderer` does not work on IL2CPP.
-```
-NotSupportedException: 
-IL2CPP does not support marshaling delegates that point to instance methods to native code.
-The method we're attempting to marshal is: UnityCustomTextureRenderer.CustomTextureRenderer::TextureUpdateCallback
-UnityCustomTextureRenderer.CustomTextureRenderer.Update () (at <00000000000000000000000000000000>:0)
-UnityCustomTextureRenderer.Samples.Test.Update () (at <00000000000000000000000000000000>:0)
-```
+<image src="./Docs/NonBlockingCustomTextureRenderer.gif">
 
 ## Tested Environment
 - Unity 2020.3.27f1
@@ -38,8 +14,8 @@ UnityCustomTextureRenderer.Samples.Test.Update () (at <0000000000000000000000000
 // manifest.json
 {
   "dependencies": {
-    "jp.sotanmochi.unitycustomtexturerenderer": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer#v1.1.1",
-    "jp.sotanmochi.unitycustomtexturerenderer.samples": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer.Samples#v1.1.1",
+    "jp.sotanmochi.unitycustomtexturerenderer": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer#v1.2.0",
+    "jp.sotanmochi.unitycustomtexturerenderer.samples": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer.Samples#v1.2.0",
     ...
   }
 }
