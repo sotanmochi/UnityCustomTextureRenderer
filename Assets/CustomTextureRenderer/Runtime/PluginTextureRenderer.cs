@@ -19,6 +19,8 @@ namespace UnityCustomTextureRenderer
         public Texture TargetTexture => _targetTexture;
         private Texture2D _targetTexture;
 
+        public int TextureBufferSize => (_textureBuffer is null) ? -1 : _textureBuffer.Length;
+
         public bool Disposed => _disposed;
         private bool _disposed;
 
@@ -48,7 +50,8 @@ namespace UnityCustomTextureRenderer
         private CustomSampler _textureUpdateLoopSampler;
 #endif
 
-        public PluginTextureRenderer(RawTextureDataUpdateCallback callback, int textureWidth, int textureHeight, 
+        public PluginTextureRenderer(RawTextureDataUpdateCallback callback, 
+                                        int textureWidth, int textureHeight, int bufferSize = 0,
                                         int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
@@ -59,7 +62,7 @@ namespace UnityCustomTextureRenderer
             _rawTextureDataUpdateCallback = callback;
             DebugLog($"[{nameof(PluginTextureRenderer)}] The RawTextureDataUpdateCallback is \n'{_rawTextureDataUpdateCallback.Target}.{_rawTextureDataUpdateCallback.Method.Name}'.");
 
-            CreateTextureBuffer(textureWidth, textureHeight);
+            CreateTextureBuffer(textureWidth, textureHeight, bufferSize);
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
 
@@ -132,7 +135,7 @@ namespace UnityCustomTextureRenderer
         /// <param name="width"></param>
         /// <param name="height"></param>
         /// <returns></returns>
-        public IntPtr CreateTextureBuffer(int width, int height)
+        public IntPtr CreateTextureBuffer(int width, int height, int bufferSize = 0)
         {
             _updated = false;
 
@@ -153,7 +156,15 @@ namespace UnityCustomTextureRenderer
 
             if (_rawTextureDataUpdateCallback != null)
             {
-                _textureBuffer = new uint[_targetTexture.width * _targetTexture.height];
+                if (bufferSize > _targetTexture.width * _targetTexture.height)
+                {
+                    _textureBuffer = new uint[bufferSize];
+                }
+                else
+                {
+                    _textureBuffer = new uint[_targetTexture.width * _targetTexture.height];
+                }
+
                 _textureBufferHandle = GCHandle.Alloc(_textureBuffer, GCHandleType.Pinned);
                 _textureBufferPtr = _textureBufferHandle.AddrOfPinnedObject();
             }
