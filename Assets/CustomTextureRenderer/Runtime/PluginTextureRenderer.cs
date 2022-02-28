@@ -25,8 +25,8 @@ namespace UnityCustomTextureRenderer
         private IntPtr _textureBufferPtr;
         private bool _updated;
 
-        private readonly int _textureWidth;
-        private readonly int _textureHeight;
+        private int _textureWidth;
+        private int _textureHeight;
         private readonly int _bytesPerPixel = 4; // RGBA32. 1 byte (8 bits) per channel.
 
         private readonly Thread _pluginRenderThread;
@@ -48,7 +48,8 @@ namespace UnityCustomTextureRenderer
         private CustomSampler _textureUpdateLoopSampler;
 #endif
 
-        public PluginTextureRenderer(RawTextureDataUpdateCallback callback, Texture2D targetTexture, bool autoDispose = true)
+        public PluginTextureRenderer(RawTextureDataUpdateCallback callback, int textureWidth, int textureHeight, 
+                                        int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _textureUpdateLoopSampler = CustomSampler.Create("RawTextureDataUpdateFunction");
@@ -56,30 +57,23 @@ namespace UnityCustomTextureRenderer
 
             _loopAction = RawTextureDataUpdate;
             _rawTextureDataUpdateCallback = callback;
+            DebugLog($"[{nameof(PluginTextureRenderer)}] The RawTextureDataUpdateCallback is \n'{_rawTextureDataUpdateCallback.Target}.{_rawTextureDataUpdateCallback.Method.Name}'.");
 
-            _textureBuffer = new uint[targetTexture.width * targetTexture.height];
-            _textureBufferHandle = GCHandle.Alloc(_textureBuffer, GCHandleType.Pinned);
-            _textureBufferPtr = _textureBufferHandle.AddrOfPinnedObject();
-
-            if (targetTexture.format != TextureFormat.RGBA32)
-            {
-                _disposed = true;
-                DebugLogError($"[{nameof(PluginTextureRenderer)}] Unsupported texture format: {targetTexture.format}");
-                return;
-            }
+            CreateTextureBuffer(textureWidth, textureHeight);
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
 
-            _targetTexture = targetTexture;
-            _textureWidth = targetTexture.width;
-            _textureHeight = targetTexture.height;
+            _targetFrameTimeMilliseconds = (int)(1000.0f / targetFrameRateOfPluginRenderThread);
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame rate: {targetFrameRateOfPluginRenderThread}");
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame time milliseconds: {_targetFrameTimeMilliseconds}");
 
             _cts = new CancellationTokenSource();
             _pluginRenderThread = new Thread(PluginRenderThread);
             _pluginRenderThread.Start();
         }
 
-        public PluginTextureRenderer(IssuePluginCustomTextureUpdateCallback callback, Texture2D targetTexture, bool autoDispose = true)
+        public PluginTextureRenderer(IssuePluginCustomTextureUpdateCallback callback, int textureWidth, int textureHeight, 
+                                        int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _textureUpdateLoopSampler = CustomSampler.Create("CustomTextureUpdateFunction");
@@ -87,21 +81,17 @@ namespace UnityCustomTextureRenderer
 
             _loopAction = IssuePluginCustomTextureUpdate;
             _customTextureUpdateCallback = callback;
+            DebugLog($"[{nameof(PluginTextureRenderer)}] The CustomTextureUpdateCallback is \n'{_customTextureUpdateCallback.Target}.{_customTextureUpdateCallback.Method.Name}'.");
 
             _textureUpdateParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(_textureUpdateParams));
 
-            if (targetTexture.format != TextureFormat.RGBA32)
-            {
-                _disposed = true;
-                DebugLogError($"[{nameof(PluginTextureRenderer)}] Unsupported texture format: {targetTexture.format}");
-                return;
-            }
+            CreateTextureBuffer(textureWidth, textureHeight);
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
 
-            _targetTexture = targetTexture;
-            _textureWidth = targetTexture.width;
-            _textureHeight = targetTexture.height;
+            _targetFrameTimeMilliseconds = (int)(1000.0f / targetFrameRateOfPluginRenderThread);
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame rate: {targetFrameRateOfPluginRenderThread}");
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Target frame time milliseconds: {_targetFrameTimeMilliseconds}");
 
             _cts = new CancellationTokenSource();
             _pluginRenderThread = new Thread(PluginRenderThread);
@@ -136,9 +126,46 @@ namespace UnityCustomTextureRenderer
             DebugLog($"[{nameof(PluginTextureRenderer)}] Disposed");
         }
 
-        public void SetUserData(uint userData)
+        /// <summary>
+        /// Runs on Unity main thread.
+        /// </summary>
+        /// <param name="width"></param>
+        /// <param name="height"></param>
+        /// <returns></returns>
+        public IntPtr CreateTextureBuffer(int width, int height)
         {
-            _userData = userData;
+            _updated = false;
+
+            _textureBufferPtr = IntPtr.Zero;
+            Marshal.FreeHGlobal(_textureUpdateParamsPtr);
+
+            if (_textureBuffer != null)
+            {
+                _textureBuffer = null;
+                _textureBufferHandle.Free();
+            }
+
+            UnityEngine.Object.Destroy(_targetTexture);
+
+            _targetTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            _textureWidth = width;
+            _textureHeight = height;
+
+            if (_rawTextureDataUpdateCallback != null)
+            {
+                _textureBuffer = new uint[_targetTexture.width * _targetTexture.height];
+                _textureBufferHandle = GCHandle.Alloc(_textureBuffer, GCHandleType.Pinned);
+                _textureBufferPtr = _textureBufferHandle.AddrOfPinnedObject();
+            }
+
+            if (_customTextureUpdateCallback != null)
+            {
+                _textureUpdateParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(_textureUpdateParams));
+            }
+
+            DebugLog($"[{nameof(PluginTextureRenderer)}] Create texture: {_textureWidth}x{_textureHeight} [pixels]");
+
+            return _textureBufferPtr;
         }
 
         public IntPtr GetTextureBufferPtr()
@@ -152,6 +179,11 @@ namespace UnityCustomTextureRenderer
             {
                 return IntPtr.Zero;
             }
+        }
+
+        public void SetUserData(uint userData)
+        {
+            _userData = userData;
         }
 
         /// <summary>

@@ -130,6 +130,7 @@ namespace UnityCustomTextureRenderer
         public void RemoveRenderer(ushort rendererId)
         {
             s_TextureRenderers.TryRemove(rendererId, out PluginTextureRenderer renderer);
+            s_TextureBufferPtrs.TryRemove(rendererId, out IntPtr bufferPtr);
         }
 
         private void SystemUpdate()
