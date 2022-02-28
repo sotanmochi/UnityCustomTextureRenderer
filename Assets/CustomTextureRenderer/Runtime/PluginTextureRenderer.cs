@@ -139,39 +139,38 @@ namespace UnityCustomTextureRenderer
         {
             _updated = false;
 
-            _textureBufferPtr = IntPtr.Zero;
-            Marshal.FreeHGlobal(_textureUpdateParamsPtr);
-
-            if (_textureBuffer != null)
+            if (_textureWidth != width || _textureHeight != height)
             {
-                _textureBuffer = null;
-                _textureBufferHandle.Free();
+                UnityEngine.Object.Destroy(_targetTexture);
+
+                _targetTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                _textureWidth = width;
+                _textureHeight = height;
             }
-
-            UnityEngine.Object.Destroy(_targetTexture);
-
-            _targetTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            _textureWidth = width;
-            _textureHeight = height;
 
             if (_rawTextureDataUpdateCallback != null)
             {
-                if (bufferSize > _targetTexture.width * _targetTexture.height)
+                if (_textureBuffer != null && _textureBuffer.Length < _textureWidth * _textureHeight)
                 {
-                    _textureBuffer = new uint[bufferSize];
-                }
-                else
-                {
-                    _textureBuffer = new uint[_targetTexture.width * _targetTexture.height];
+                    _textureBufferPtr = IntPtr.Zero;
+                    _textureBuffer = null;
+                    _textureBufferHandle.Free();
                 }
 
-                _textureBufferHandle = GCHandle.Alloc(_textureBuffer, GCHandleType.Pinned);
-                _textureBufferPtr = _textureBufferHandle.AddrOfPinnedObject();
-            }
+                if (_textureBuffer is null)
+                {
+                    if (bufferSize > _targetTexture.width * _targetTexture.height)
+                    {
+                        _textureBuffer = new uint[bufferSize];
+                    }
+                    else
+                    {
+                        _textureBuffer = new uint[_targetTexture.width * _targetTexture.height];
+                    }
 
-            if (_customTextureUpdateCallback != null)
-            {
-                _textureUpdateParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(_textureUpdateParams));
+                    _textureBufferHandle = GCHandle.Alloc(_textureBuffer, GCHandleType.Pinned);
+                    _textureBufferPtr = _textureBufferHandle.AddrOfPinnedObject();
+                }
             }
 
             DebugLog($"[{nameof(PluginTextureRenderer)}] Create texture: {_textureWidth}x{_textureHeight} [pixels]");
