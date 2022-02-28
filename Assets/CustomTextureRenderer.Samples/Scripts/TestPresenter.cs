@@ -13,7 +13,7 @@ namespace UnityCustomTextureRenderer.Samples
         {
             _uiView.SetGraphicsAPI(SystemInfo.graphicsDeviceType.ToString());
 
-            _test.OnInitialized += (values) =>
+            _test.OnUpdateTexture += (values) =>
             {
                 var title = nameof(UnityCustomTextureRenderer.CustomTextureRenderSystem);
                 _uiView.SetTitle(title);

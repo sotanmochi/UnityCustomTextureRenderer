@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -36,16 +37,26 @@ namespace UnityCustomTextureRenderer.Samples
         [SerializeField] TextureSize _textureSize;
         [SerializeField] PluginType _pluginType;
 
-        public event Action<(int TextureWidth, int TextureHeight)> OnInitialized;
+        public event Action<(int TextureWidth, int TextureHeight)> OnUpdateTexture;
+
+        MaterialPropertyBlock _prop;
+        Renderer _renderer;
+
+        SynchronizationContext _unityMainThreadContext;
 
         uint _frame;
-
-        Texture2D _texture;
+        int _rendererId;
+        int _currentTextureSize;
         PluginTextureRenderer _pluginTextureRenderer;
 
         void Start()
         {
-            var size = _textureSize switch
+            _prop = new MaterialPropertyBlock();
+            _renderer = GetComponent<Renderer>();
+
+            _unityMainThreadContext = SynchronizationContext.Current;
+
+            _currentTextureSize = _textureSize switch
             {
                 TextureSize._64x64     => 64,
                 TextureSize._128x128   => 128,
@@ -57,38 +68,41 @@ namespace UnityCustomTextureRenderer.Samples
                 _ => 64,
             };
 
-            _texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            _texture.wrapMode = TextureWrapMode.Clamp;
-
             if (_pluginType is PluginType.Type1)
             {
                 var callback = Marshal.GetDelegateForFunctionPointer<IssuePluginCustomTextureUpdateCallback>(GetTextureUpdateCallback());
-                _pluginTextureRenderer = new PluginTextureRenderer(callback, _texture);
-                CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
+                _pluginTextureRenderer = new PluginTextureRenderer(callback, _currentTextureSize, _currentTextureSize);
+                _rendererId = CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
             }
             else if (_pluginType is PluginType.Type2)
             {
-                _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, _texture);
-                CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
+                _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, _currentTextureSize, _currentTextureSize);
+                _rendererId = CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
             }
 
             // Set the texture to the renderer with using a property block.
-            var prop = new MaterialPropertyBlock();
-            prop.SetTexture("_MainTex", _texture);
-            GetComponent<Renderer>().SetPropertyBlock(prop);
+            _prop.SetTexture("_MainTex", _pluginTextureRenderer.TargetTexture);
+            _renderer.SetPropertyBlock(_prop);
 
-            OnInitialized?.Invoke((size, size));
-        }
-
-        void OnDestroy()
-        {
-            Destroy(_texture);
+            OnUpdateTexture?.Invoke((_currentTextureSize, _currentTextureSize));
         }
 
         void Update()
         {
             _frame = (uint)(Time.time * 60);
             _pluginTextureRenderer.SetUserData(_frame);
+
+            _currentTextureSize = _textureSize switch
+            {
+                TextureSize._64x64     => 64,
+                TextureSize._128x128   => 128,
+                TextureSize._256x256   => 256,
+                TextureSize._512x512   => 512,
+                TextureSize._1024x1024 => 1024,
+                TextureSize._2048x2048 => 2048,
+                TextureSize._4096x4096 => 4096,
+                _ => 64,
+            };
 
             // Rotation
             transform.eulerAngles = new Vector3(10, 20, 30) * Time.time;
@@ -103,6 +117,27 @@ namespace UnityCustomTextureRenderer.Samples
         /// <param name="frameCount"></param>
         void UpdateRawTextureDataCallback(IntPtr data, int width, int height, int bytesPerPixel)
         {
+            if (_pluginType is PluginType.Type2 
+            && (_currentTextureSize != width || _currentTextureSize != height))
+            {
+                _unityMainThreadContext.Send(_ => 
+                {
+                    CustomTextureRenderSystem.Instance.RemoveRenderer((ushort)_rendererId);
+
+                    data = _pluginTextureRenderer.CreateTextureBuffer(_currentTextureSize, _currentTextureSize);
+                    width = _currentTextureSize;
+                    height = _currentTextureSize;
+
+                    _rendererId = CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
+
+                    // Set the texture to the renderer with using a property block.
+                    _prop.SetTexture("_MainTex", _pluginTextureRenderer.TargetTexture);
+                    _renderer.SetPropertyBlock(_prop);
+
+                    OnUpdateTexture?.Invoke((_currentTextureSize, _currentTextureSize));
+                }, null);
+            }
+
             UpdateRawTextureData(data, width, height, _frame);
         }
     }
