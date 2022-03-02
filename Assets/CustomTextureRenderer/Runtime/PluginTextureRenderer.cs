@@ -29,7 +29,9 @@ namespace UnityCustomTextureRenderer
 
         private int _textureWidth;
         private int _textureHeight;
+        private TextureFormat _textureFormat = TextureFormat.RGBA32;
         private readonly int _bytesPerPixel = 4; // RGBA32. 1 byte (8 bits) per channel.
+        private readonly ColorSpace _activeColorSpace;
 
         private readonly Thread _pluginRenderThread;
         private readonly Action _loopAction;
@@ -51,18 +53,19 @@ namespace UnityCustomTextureRenderer
 #endif
 
         public PluginTextureRenderer(RawTextureDataUpdateCallback callback, 
-                                        int textureWidth, int textureHeight, int bufferSize = 0,
+                                        int textureWidth, int textureHeight, int bufferSize = 0, TextureFormat format = TextureFormat.RGBA32, 
                                         int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _textureUpdateLoopSampler = CustomSampler.Create("RawTextureDataUpdateFunction");
 #endif
+            _activeColorSpace = UnityEngine.QualitySettings.activeColorSpace;
 
             _loopAction = RawTextureDataUpdate;
             _rawTextureDataUpdateCallback = callback;
             DebugLog($"[{nameof(PluginTextureRenderer)}] The RawTextureDataUpdateCallback is \n'{_rawTextureDataUpdateCallback.Target}.{_rawTextureDataUpdateCallback.Method.Name}'.");
 
-            CreateTextureBuffer(textureWidth, textureHeight, bufferSize);
+            CreateTextureBuffer(textureWidth, textureHeight, bufferSize, format);
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
 
@@ -75,12 +78,14 @@ namespace UnityCustomTextureRenderer
             _pluginRenderThread.Start();
         }
 
-        public PluginTextureRenderer(IssuePluginCustomTextureUpdateCallback callback, int textureWidth, int textureHeight, 
+        public PluginTextureRenderer(IssuePluginCustomTextureUpdateCallback callback, 
+                                        int textureWidth, int textureHeight, int bufferSize = 0, TextureFormat format = TextureFormat.RGBA32, 
                                         int targetFrameRateOfPluginRenderThread = 60, bool autoDispose = true)
         {
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             _textureUpdateLoopSampler = CustomSampler.Create("CustomTextureUpdateFunction");
 #endif
+            _activeColorSpace = UnityEngine.QualitySettings.activeColorSpace;
 
             _loopAction = IssuePluginCustomTextureUpdate;
             _customTextureUpdateCallback = callback;
@@ -88,7 +93,7 @@ namespace UnityCustomTextureRenderer
 
             _textureUpdateParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(_textureUpdateParams));
 
-            CreateTextureBuffer(textureWidth, textureHeight);
+            CreateTextureBuffer(textureWidth, textureHeight, bufferSize, format);
 
             if (autoDispose){ UnityEngine.Application.quitting += Dispose; }
 
@@ -135,7 +140,7 @@ namespace UnityCustomTextureRenderer
         /// <param name="width"></param>
         /// <param name="height"></param>
         /// <returns></returns>
-        public IntPtr CreateTextureBuffer(int width, int height, int bufferSize = 0)
+        public IntPtr CreateTextureBuffer(int width, int height, int bufferSize = 0, TextureFormat format = TextureFormat.RGBA32)
         {
             _updated = false;
 
@@ -143,9 +148,10 @@ namespace UnityCustomTextureRenderer
             {
                 UnityEngine.Object.Destroy(_targetTexture);
 
-                _targetTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                _targetTexture = new Texture2D(width, height, format, false);
                 _textureWidth = width;
                 _textureHeight = height;
+                _textureFormat = format;
             }
 
             if (_rawTextureDataUpdateCallback != null)
@@ -213,6 +219,25 @@ namespace UnityCustomTextureRenderer
             _textureUpdateParams.height = (uint)_textureHeight;
             _textureUpdateParams.bpp = (uint)_bytesPerPixel;
             _textureUpdateParams.userData = _userData;
+
+            if (_activeColorSpace is ColorSpace.Linear)
+            {
+                _textureUpdateParams.format = _textureFormat switch 
+                {
+                    TextureFormat.RGBA32 => UnityRenderingExtTextureFormat.kUnityRenderingExtFormatR8G8B8A8_SRGB,
+                    TextureFormat.BGRA32 => UnityRenderingExtTextureFormat.kUnityRenderingExtFormatB8G8R8A8_SRGB,
+                    _ => UnityRenderingExtTextureFormat.kUnityRenderingExtFormatR8G8B8A8_SRGB,
+                };
+            }
+            else
+            {
+                _textureUpdateParams.format = _textureFormat switch 
+                {
+                    TextureFormat.RGBA32 => UnityRenderingExtTextureFormat.kUnityRenderingExtFormatR8G8B8A8_UNorm,
+                    TextureFormat.BGRA32 => UnityRenderingExtTextureFormat.kUnityRenderingExtFormatB8G8R8A8_UNorm,
+                    _ => UnityRenderingExtTextureFormat.kUnityRenderingExtFormatR8G8B8A8_UNorm,
+                };
+            }
 
             var eventId = (int)UnityRenderingExtEventType.kUnityRenderingExtEventUpdateTextureBeginV2;
             Marshal.StructureToPtr(_textureUpdateParams, _textureUpdateParamsPtr, false);
