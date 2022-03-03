@@ -215,6 +215,7 @@ namespace UnityCustomTextureRenderer
         /// </summary>
         unsafe void IssuePluginCustomTextureUpdate()
         {
+            // Update parameters
             _textureUpdateParams.width = (uint)_textureWidth;
             _textureUpdateParams.height = (uint)_textureHeight;
             _textureUpdateParams.bpp = (uint)_bytesPerPixel;
@@ -239,6 +240,7 @@ namespace UnityCustomTextureRenderer
                 };
             }
 
+            // Begin texture update
             var eventId = (int)UnityRenderingExtEventType.kUnityRenderingExtEventUpdateTextureBeginV2;
             Marshal.StructureToPtr(_textureUpdateParams, _textureUpdateParamsPtr, false);
 
@@ -248,6 +250,12 @@ namespace UnityCustomTextureRenderer
                                     Marshal.PtrToStructure(_textureUpdateParamsPtr, 
                                                             typeof(UnityRenderingExtTextureUpdateParamsV2));
             _textureBufferPtr = new IntPtr(_textureUpdateParams.texData);
+
+            // End of texture update
+            eventId = (int)UnityRenderingExtEventType.kUnityRenderingExtEventUpdateTextureEndV2;
+            Marshal.StructureToPtr(_textureUpdateParams, _textureUpdateParamsPtr, false);
+
+            _customTextureUpdateCallback.Invoke(eventId, _textureUpdateParamsPtr);
         }
 
         /// <summary>
