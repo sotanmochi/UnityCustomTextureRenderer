@@ -56,6 +56,8 @@ namespace UnityCustomTextureRenderer.Samples
 
             _unityMainThreadContext = SynchronizationContext.Current;
 
+            CustomTextureRenderSystem.Instance.Initialize(maxNumberOfRenderer: 2);
+
             _currentTextureSize = _textureSize switch
             {
                 TextureSize._64x64     => 64,
@@ -71,12 +73,14 @@ namespace UnityCustomTextureRenderer.Samples
             if (_pluginType is PluginType.Type1)
             {
                 var callback = Marshal.GetDelegateForFunctionPointer<IssuePluginCustomTextureUpdateCallback>(GetTextureUpdateCallback());
-                _pluginTextureRenderer = new PluginTextureRenderer(callback, _currentTextureSize, _currentTextureSize);
+                _pluginTextureRenderer = new PluginTextureRenderer(callback, 
+                                            _currentTextureSize, _currentTextureSize, targetFrameRateOfPluginRenderThread: 60);
                 _rendererId = CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
             }
             else if (_pluginType is PluginType.Type2)
             {
-                _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, _currentTextureSize, _currentTextureSize);
+                _pluginTextureRenderer = new PluginTextureRenderer(UpdateRawTextureDataCallback, 
+                                            _currentTextureSize, _currentTextureSize, targetFrameRateOfPluginRenderThread: 60);
                 _rendererId = CustomTextureRenderSystem.Instance.AddRenderer(_pluginTextureRenderer);
             }
 
@@ -89,7 +93,9 @@ namespace UnityCustomTextureRenderer.Samples
 
         void Update()
         {
-            _frame = (uint)(Time.time * 60);
+            var time = Time.realtimeSinceStartup;
+
+            _frame = (uint)(time * 60);
             _pluginTextureRenderer.SetUserData(_frame);
 
             _currentTextureSize = _textureSize switch
@@ -105,7 +111,7 @@ namespace UnityCustomTextureRenderer.Samples
             };
 
             // Rotation
-            transform.eulerAngles = new Vector3(10, 20, 30) * Time.time;
+            transform.eulerAngles = new Vector3(10, 20, 30) * time;
         }
 
         /// <summary>
