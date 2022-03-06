@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -50,6 +52,8 @@ namespace UnityCustomTextureRenderer
 
 #endregion
 
+        static readonly WaitForEndOfFrame _waitForEndOfFrameYieldInstruction = new WaitForEndOfFrame();
+
         private bool _initialized;
         private bool _disposed;
 
@@ -59,25 +63,28 @@ namespace UnityCustomTextureRenderer
         private static readonly ConcurrentDictionary<ushort, PluginTextureRenderer> s_TextureRenderers = new ConcurrentDictionary<ushort, PluginTextureRenderer>();
         private static readonly ConcurrentDictionary<ushort, IntPtr> s_TextureBufferPtrs = new ConcurrentDictionary<ushort, IntPtr>();
 
+        class TextureRenderingStatus
+        {
+            public bool Executing;
+        }
+
+        private static readonly Dictionary<ushort, TextureRenderingStatus> s_TextureRenderingStatus = new Dictionary<ushort, TextureRenderingStatus>();
+
+        struct TextureRenderEvent
+        {
+            public ushort RendererId;
+            public uint EnqueueFrameCount;
+        }
+
+        private int _maxNumberOfRenderer;
+        private List<TextureRenderEvent[]> _textureRenderEventBuffer;
+        private List<ComputeBuffer> _textureRenderEventComputeBuffer;
+
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
         private static readonly CustomSampler _textureUpdateCallbackSampler = CustomSampler.Create("TextureUpdateCallback");
 #endif
 
-#region MonoBehaviour functions
-
-        private void Awake()
-        {
-            Initialize();
-        }
-
-        private void LateUpdate()
-        {
-            SystemUpdate();
-        }
-
-#endregion
-
-        public void Initialize()
+        public void Initialize(int maxNumberOfRenderer = 1)
         {
             if (_initialized)
             {
@@ -86,10 +93,22 @@ namespace UnityCustomTextureRenderer
             }
 
             UnityEngine.Application.quitting += Dispose;
+
             _commandBuffer = new CommandBuffer();
             _commandBuffer.name = "CustomTextureRenderer.IssuePluginCustomTextureUpdateV2";
 
+            _maxNumberOfRenderer = maxNumberOfRenderer;
+            _textureRenderEventBuffer = new List<TextureRenderEvent[]>();
+            _textureRenderEventComputeBuffer = new List<ComputeBuffer>();
+            for (int i = 0; i < maxNumberOfRenderer; i++)
+            {
+                _textureRenderEventBuffer.Add(new TextureRenderEvent[1]);
+                _textureRenderEventComputeBuffer.Add(new ComputeBuffer(1, Marshal.SizeOf(typeof(TextureRenderEvent))));
+            }
+
             _initialized = true;
+
+            StartCoroutine(FrameLoop());
         }
 
         public void Dispose()
@@ -110,6 +129,15 @@ namespace UnityCustomTextureRenderer
             s_TextureRenderers.Clear();
             s_TextureBufferPtrs.Clear();
 
+            _commandBuffer.Dispose();
+            _commandBuffer = null;
+
+            for (int i = 0; i < _textureRenderEventComputeBuffer.Count; i++)
+            {
+                _textureRenderEventComputeBuffer[i].Dispose();
+                _textureRenderEventComputeBuffer[i] = null;
+            }
+
             DebugLog($"[{nameof(CustomTextureRenderSystem)}] Disposed");
         }
 
@@ -118,6 +146,7 @@ namespace UnityCustomTextureRenderer
             var rendererId = _rendererRegisterationCount;
             if (s_TextureRenderers.TryAdd(rendererId, renderer))
             {
+                s_TextureRenderingStatus[rendererId] = new TextureRenderingStatus();
                 _rendererRegisterationCount++;
                 return rendererId;
             }
@@ -131,21 +160,76 @@ namespace UnityCustomTextureRenderer
         {
             s_TextureRenderers.TryRemove(rendererId, out PluginTextureRenderer renderer);
             s_TextureBufferPtrs.TryRemove(rendererId, out IntPtr bufferPtr);
+            s_TextureRenderingStatus.Remove(rendererId);
         }
 
+        private uint _frameCount;
+
+        /// <summary>
+        /// Runs on main thread
+        /// </summary>
+        private IEnumerator FrameLoop()
+        {
+            while (!_disposed)
+            {
+                yield return _waitForEndOfFrameYieldInstruction;
+                _frameCount++;
+                SystemUpdate();
+            }
+        }
+
+        /// <summary>
+        /// Runs on main thread
+        /// </summary>
         private void SystemUpdate()
         {
             if (_disposed) { return; }
 
+            // DebugLog("*****");
+
+            var rendererCount = 0;
             foreach (var keyValue in s_TextureRenderers)
             {
                 var rendererId = keyValue.Key;
                 var renderer = keyValue.Value;
 
-                s_TextureBufferPtrs[rendererId] = renderer.GetTextureBufferPtr();
-                if (s_TextureBufferPtrs[rendererId] != IntPtr.Zero)
+                // DebugLog($"[Texture Rendering Status] CurrentFrameCount: {_frameCount}, RendererId: {rendererId}, Executing: {s_TextureRenderingStatus[rendererId].Executing}");
+
+                if (!s_TextureRenderingStatus[rendererId].Executing)
                 {
-                    _commandBuffer.IssuePluginCustomTextureUpdateV2(GetTextureUpdateCallback(), renderer.TargetTexture, rendererId);
+                    s_TextureBufferPtrs[rendererId] = renderer.GetTextureBufferPtr();
+
+                    if (s_TextureBufferPtrs[rendererId] != IntPtr.Zero && rendererCount < _maxNumberOfRenderer)
+                    {
+                        // DebugLog($"<color=cyan>[Texture Buffer Ready] CurrentFrameCount: {_frameCount}, RendererId: {rendererId}</color>");
+
+                        s_TextureRenderingStatus[rendererId].Executing = true;
+
+                        _textureRenderEventBuffer[rendererCount][0] = new TextureRenderEvent()
+                        {
+                            RendererId = rendererId,
+                            EnqueueFrameCount = _frameCount,
+                        };
+
+                        var computeBuffer = _textureRenderEventComputeBuffer[rendererCount];
+                        computeBuffer.SetData(_textureRenderEventBuffer[rendererCount]);
+                        rendererCount++;
+
+                        _commandBuffer.IssuePluginCustomTextureUpdateV2(GetTextureUpdateCallback(), renderer.TargetTexture, rendererId);
+                        _commandBuffer.RequestAsyncReadback(computeBuffer, request =>
+                        {
+                            var status = request.GetData<TextureRenderEvent>()[0];
+
+                            var rendererId = status.RendererId;
+                            var enqueueFrame = status.EnqueueFrameCount;
+
+                            s_TextureRenderingStatus[rendererId].Executing = false;
+
+                            // DebugLog($"<color=orange>[Async GPU Readback] CurrentFrameCount: {_frameCount}, EnqueuedFrame: {enqueueFrame}, RendererId: {rendererId}</color>");
+                        });
+
+                        // DebugLog($"<color=cyan>[Dispatch Texture Render Event] CurrentFrameCount: {_frameCount}, RendererId: {rendererId}</color>");
+                    }
                 }
             }
 
