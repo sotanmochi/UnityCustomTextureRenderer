@@ -120,7 +120,7 @@ namespace UnityCustomTextureRenderer
             _rawTextureDataUpdateCallback = null;
             _customTextureUpdateCallback = null;
 
-            _targetTexture = null;
+            UnityEngine.Object.Destroy(_targetTexture);
             _textureBufferPtr = IntPtr.Zero;
 
             Marshal.FreeHGlobal(_textureUpdateParamsPtr);
