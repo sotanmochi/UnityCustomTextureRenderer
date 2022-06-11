@@ -685,7 +685,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2852e5e5a0d4073478f3c6e64d947fdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _targetFrameRate: 0
   _test: {fileID: 1583533869}
   _uiView: {fileID: 736206734}
 --- !u!4 &736206736

@@ -4,15 +4,6 @@ namespace UnityCustomTextureRenderer.Samples
 {
     public sealed class TestPresenter : MonoBehaviour
     {
-        enum TargetFrameRate
-        {
-            None,
-            FPS10,
-            FPS30,
-            FPS60,
-        }
-
-        [SerializeField] TargetFrameRate _targetFrameRate;
         [SerializeField] Test _test;
         [SerializeField] TestUIView _uiView;
 
@@ -20,17 +11,6 @@ namespace UnityCustomTextureRenderer.Samples
 
         void Awake()
         {
-            UnityEngine.QualitySettings.vSyncCount = 0;
-
-            var fps = _targetFrameRate switch
-            {
-                TargetFrameRate.FPS10 => 10,
-                TargetFrameRate.FPS30 => 30,
-                TargetFrameRate.FPS60 => 60,
-                _ => -1,
-            };
-            UnityEngine.Application.targetFrameRate = fps;
-
             _uiView.SetGraphicsAPI(SystemInfo.graphicsDeviceType.ToString());
 
             _test.OnUpdateTexture += (values) =>
