@@ -7,7 +7,6 @@ The function for updating textures runs on another thread.
 
 ## Tested Environment
 - Unity 2020.3.27f1
-- Unity 2021.2.8f1
 - Windows 10
 
 ## How to install
@@ -15,8 +14,8 @@ The function for updating textures runs on another thread.
 // manifest.json
 {
   "dependencies": {
-    "jp.sotanmochi.unitycustomtexturerenderer": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer#v1.4.0",
-    "jp.sotanmochi.unitycustomtexturerenderer.samples": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer.Samples#v1.4.0",
+    "jp.sotanmochi.unitycustomtexturerenderer": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer#v1.3.2  ",
+    "jp.sotanmochi.unitycustomtexturerenderer.samples": "https://github.com/sotanmochi/UnityCustomTextureRenderer.git?path=Assets/CustomTextureRenderer.Samples#v1.3.2",
     ...
   }
 }

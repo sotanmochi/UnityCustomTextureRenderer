@@ -2,7 +2,6 @@
 
 ## Tested Environment
 - Unity 2020.3.27f1
-- Unity 2021.2.8f1
 - Windows 10
 
 ## References
