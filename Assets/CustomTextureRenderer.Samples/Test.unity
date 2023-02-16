@@ -955,7 +955,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _textureSize: 3
-  _pluginType: 0
+  _pluginType: 1
 --- !u!1 &1703854062
 GameObject:
   m_ObjectHideFlags: 0

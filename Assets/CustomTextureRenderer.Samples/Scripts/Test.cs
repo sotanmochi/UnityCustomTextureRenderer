@@ -17,6 +17,9 @@ namespace UnityCustomTextureRenderer.Samples
         [System.Runtime.InteropServices.DllImport("Plasma2")]
         static extern IntPtr UpdateRawTextureData(IntPtr data, int width, int height, uint frameCount);
 
+        [System.Runtime.InteropServices.DllImport("Plasma3")]
+        static extern IntPtr update_raw_texture_data(IntPtr data, int width, int height, uint frameCount);
+
         enum TextureSize
         {
             _64x64,
@@ -138,7 +141,8 @@ namespace UnityCustomTextureRenderer.Samples
                 }, null);
             }
 
-            UpdateRawTextureData(data, width, height, _frame);
+            UpdateRawTextureData(data, width, height, _frame);    // Plasma2.dll
+            // update_raw_texture_data(data, width, height, _frame); // plasma3.dll
         }
     }
 }
